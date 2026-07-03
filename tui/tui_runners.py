@@ -929,6 +929,11 @@ class TuiRunnersMixin:
             "--resolution", self.get_input("pb-res", "50000"),
             "--pos_encodings_dim", self.get_input("pb-pe-dim", "16"),
         ]
+        hic_smoothing = self.get_input("pb-hic-smoothing", "true").lower()
+        if hic_smoothing in ("false", "0", "no", "off"):
+            cmd += ["--no_hic_smoothing"]
+        else:
+            cmd += ["--hic_smoothing"]
         labels_json = self.get_input("pb-labels-json")
         if labels_json:
             cmd += ["--dataset_labels", labels_json]
@@ -947,6 +952,7 @@ class TuiRunnersMixin:
             "--npz", self.get_input("inf-npz"),
             "--results", self.get_input("inf-results"),
             "--device", device,
+            "--eval_target", self.get_input("inf-eval-target", "smoothed"),
             "--encoder_hidden_embedding_size",
             self.get_input("inf-encoder-hidden", "64"),
             "--num_graph_conv_blocks",

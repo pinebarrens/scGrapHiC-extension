@@ -219,6 +219,8 @@ def random_walk(m_input, t):
 
 
 def genome_disco(m1, m2, transition=True, tmax=3, tmin=3):
+    m1 = np.array(m1, copy=True)
+    m2 = np.array(m2, copy=True)
     np.fill_diagonal(m1, 0)
     np.fill_diagonal(m2, 0)
     

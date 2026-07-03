@@ -16,12 +16,12 @@ INFERENCE = PROJECT_ROOT / "inference.py"
 FINETUNE = PROJECT_ROOT / "finetune.py"
 DOWNLOAD = SRC_DIR / "download_datasets.py"
 
-MOD_PREPROCESS = "src.preprocess_datasets"    # subcommands: scrnaseq or schic
+MOD_PREPROCESS = "src.preprocess_datasets"
 MOD_PSEUDOBULK = "src.pseudobulk"
 MOD_BUILD = "src.dataset_creator"
 
 # Conda env
-CONDA_ENV = os.environ.get("SCGRAPHIC_CONDA_ENV", "scg")
+CONDA_ENV = os.environ.get("SCGRAPHIC_CONDA_ENV", "scgraphic")
 
 SAVED_PATHS_FILE = TUI_DIR / ".scgraphic_saved_paths.json"
 

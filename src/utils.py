@@ -318,6 +318,9 @@ def initialize_parameters_from_args():
     parser.add_argument('--npz', type=str, default=None, help='Path to the test .npz dataset for inference')
     parser.add_argument('--results', type=str, default=None, help='Directory for evaluation results (defaults to globals RESULTS)')
     parser.add_argument('--device', type=str, default='cpu', help='Accelerator for inference', choices=['cpu', 'gpu', 'auto'])
+    parser.add_argument('--eval_target', type=str, default='smoothed',
+                        choices=['smoothed', 'unsmoothed'],
+                        help='Target version saved for post-hoc evaluation')
 
     args = parser.parse_args()
     

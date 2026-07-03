@@ -280,6 +280,8 @@ def build_build(app):
         ],
         id="pb-norm", value="library_size_normalization",
     )
+    yield Label("Hi-C smoothing for training targets", classes="field-label")
+    yield Switch(id="pb-hic-smoothing", value=True)
     yield Label("Resolution (bp)", classes="field-label")
     yield Input(value="50000", id="pb-res", classes="field-input")
     yield Label("Positional encoding dimension", classes="field-label")
@@ -336,6 +338,14 @@ def build_inference(app):
     yield Input(
         placeholder="/path/to/results",
         id="inf-results", classes="field-input",
+    )
+    yield Label("Post-hoc evaluation target", classes="field-label")
+    yield Select(
+        options=[
+            ("Smoothed training target", "smoothed"),
+            ("Unsmoothed contact map", "unsmoothed"),
+        ],
+        id="inf-eval-target", value="smoothed",
     )
     yield Label("Encoder hidden embedding size", classes="field-label")
     yield Input(value="64", id="inf-encoder-hidden", classes="field-input")

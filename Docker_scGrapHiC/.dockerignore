@@ -1,0 +1,8 @@
+.git
+**/__pycache__
+**/*.pyc
+TUI_results
+TUI_data
+weights
+Docker_scGrapHiC
+scgraphic_arch.png

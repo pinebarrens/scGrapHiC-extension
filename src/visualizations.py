@@ -86,9 +86,10 @@ def visualize_generated_hic_contact_matrix(generated, target, output_file):
     plt.close()
 
 
-def log_results(generated, target, score, idx, mtd, PARAMETERS):
+def log_results(generated, target, eval_target, score, idx, mtd, PARAMETERS):
     generated = generated.detach().to('cpu').numpy()
     target = target.detach().to('cpu').numpy()
+    eval_target = eval_target.detach().to('cpu').numpy()
     idx = idx.detach().to('cpu').numpy()
     mtd = mtd.detach().to('cpu').numpy()
     
@@ -111,6 +112,7 @@ def log_results(generated, target, score, idx, mtd, PARAMETERS):
     create_directory(os.path.join(output_folder, 'visualizations'))
     create_directory(os.path.join(output_folder, 'generated'))
     create_directory(os.path.join(output_folder, 'targets'))
+    create_directory(os.path.join(output_folder, 'targets_model'))
     
     results_file = os.path.join(RESULTS, PARAMETERS['experiment'], 'results.csv')
 
@@ -119,7 +121,7 @@ def log_results(generated, target, score, idx, mtd, PARAMETERS):
     )
     
     visualize_generated_hic_contact_matrix(
-        generated, target,
+        generated, eval_target,
         os.path.join(output_folder, 'visualizations', '{}.png'.format(file_name))
     )
     np.save(
@@ -128,6 +130,10 @@ def log_results(generated, target, score, idx, mtd, PARAMETERS):
     )
     np.save(
         os.path.join(output_folder, 'targets', '{}.npy'.format(file_name)),
+        eval_target
+    )
+    np.save(
+        os.path.join(output_folder, 'targets_model', '{}.npy'.format(file_name)),
         target
     )
     

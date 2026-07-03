@@ -32,6 +32,7 @@ class GenomicDataset(torch.utils.data.Dataset):
         data = np.load(path, allow_pickle=True, mmap_mode='r')
         self.node_features = data['node_features']
         self.targets = data['targets']
+        self.targets_eval = data['targets_eval'] if 'targets_eval' in data.files else self.targets
         self.pes = data['pes']
         self.bulk_hics = data['bulk_hics']
         self.indexes = data['indexes']
@@ -51,6 +52,7 @@ class GenomicDataset(torch.utils.data.Dataset):
         positional_encodings = model.transform(positional_encodings)
         
         targets = self.targets[idx][0, :, :]
+        targets_eval = self.targets_eval[idx][0, :, :]
         bulk_hics = self.bulk_hics[idx][0, :, :]
          
         indexes = self.indexes[idx]
@@ -59,7 +61,8 @@ class GenomicDataset(torch.utils.data.Dataset):
         return {
             'node_features': torch.from_numpy(node_features).float(),
             'positional_encodings': torch.from_numpy(positional_encodings).float(), 
-            'targets' : torch.from_numpy(targets).float(), 
+            'targets' : torch.from_numpy(targets).float(),
+            'targets_eval': torch.from_numpy(targets_eval).float(),
             'bulk_hics': torch.from_numpy(bulk_hics).float(),
             'indexes': torch.from_numpy(indexes),
             'metadatas': torch.from_numpy(metadatas),
@@ -177,6 +180,7 @@ class scGrapHiC(pl.LightningModule):
         pe = batch['positional_encodings']
         bulk = batch['bulk_hics']
         targets = batch['targets']
+        targets_eval = batch['targets_eval']
         indexes = batch['indexes']
         metadatas = batch['metadatas']
         
@@ -184,13 +188,17 @@ class scGrapHiC(pl.LightningModule):
         output = self.transform(nf, pe, bulk)
         
         targets = targets.view(targets.shape[0], 1, targets.shape[1], targets.shape[2])
+        targets_eval = targets_eval.view(targets_eval.shape[0], 1, targets_eval.shape[1], targets_eval.shape[2])
         
         scores = run_evals(output, targets)
+        eval_target_mode = self.PARAMETERS.get('eval_target', 'smoothed')
+        eval_targets = targets_eval if eval_target_mode == 'unsmoothed' else targets
         
         for i in range(output.shape[0]):
             log_results(
                 output[i, 0, :, :],
                 targets[i, 0, :, :],
+                eval_targets[i, 0, :, :],
                 [scores['MSE'][i], scores['SSIM'][i], scores['GD'][i], scores['SCC'][i]],
                 indexes[i, :],
                 metadatas[i, :],

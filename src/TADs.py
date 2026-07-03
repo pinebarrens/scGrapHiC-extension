@@ -199,6 +199,14 @@ def create_genomic_bins(
 
 
 
+def get_chromosome_name(file_identifier):
+    for token in file_identifier.split('_'):
+        if token.startswith('chr'):
+            return token
+
+    raise ValueError('Could not parse chromosome from {}'.format(file_identifier))
+
+
 def create_cooler_file(matrix, file_identifier, PARAMETERS, output_path):
     output_file = os.path.join(output_path, file_identifier+'.cool')
     
@@ -208,7 +216,7 @@ def create_cooler_file(matrix, file_identifier, PARAMETERS, output_path):
     
     h, w = matrix.shape
     chrom_pixels = create_genomic_pixels(matrix)
-    bins = create_genomic_bins(chr, PARAMETERS['resolution'], h)
+    bins = create_genomic_bins(get_chromosome_name(file_identifier), PARAMETERS['resolution'], h)
     
     cooler.create_cooler(output_file, bins, chrom_pixels,
                     dtypes={"count":"int"}, 
@@ -248,6 +256,9 @@ def run_chromosight(cooler_file):
 
 
 def overlap_analysis(base, target, rp):
+    if len(base) == 0 and len(target) == 0:
+        return np.nan, np.nan, np.nan, np.nan
+
     multi_map = {}
     for coordinate in base:
         coordinate = is_overlapping(coordinate, target, rp)

@@ -200,7 +200,8 @@ def create_chromosome_dataset(rna_seq_dataset_path, schic_dataset_path, chromoso
         schic_data = np.apply_along_axis(normalization_function, 1, schic_data)
         bulk_hic_data = np.apply_along_axis(normalization_function, 1, bulk_hic_data)
     
-    schic_data = schic_data.reshape(schic_data.shape[0], 1, schic_data.shape[1], schic_data.shape[2]) 
+    schic_data = schic_data.reshape(schic_data.shape[0], 1, schic_data.shape[1], schic_data.shape[2])
+    targets_eval = schic_data.copy()
     bulk_hic_data = bulk_hic_data.reshape(bulk_hic_data.shape[0], 1, bulk_hic_data.shape[1], bulk_hic_data.shape[2]) 
     
     parameterized_graph_pe = lambda adj: graph_pe(adj, encoding_dim=PARAMETERS['pos_encodings_dim'])
@@ -219,7 +220,15 @@ def create_chromosome_dataset(rna_seq_dataset_path, schic_dataset_path, chromoso
         [int(num_cells)]*indexes.shape[0]
     ]).T
     
-    return node_features[4:-4, :, :], schic_data[4:-4, :, :, :], pe[4:-4, :, :], bulk_hic_data[4:-4, :, :, :], indexes[4:-4, :], metadata[4:-4, :]
+    return (
+        node_features[4:-4, :, :],
+        schic_data[4:-4, :, :, :],
+        targets_eval[4:-4, :, :, :],
+        pe[4:-4, :, :],
+        bulk_hic_data[4:-4, :, :, :],
+        indexes[4:-4, :],
+        metadata[4:-4, :],
+    )
 
 
 
@@ -258,12 +267,13 @@ def create_cell_type_dataset(rnaseq_folder, schic_folder, PARAMETERS, set='debug
 
     node_features = np.concatenate([r[0] for r in results])
     targets = np.concatenate([r[1] for r in results])
-    pes = np.concatenate([r[2] for r in results])
-    bulk_hic = np.concatenate([r[3] for r in results])
-    indexes = np.concatenate([r[4] for r in results])
-    metadatas = np.concatenate([r[5] for r in results])
+    targets_eval = np.concatenate([r[2] for r in results])
+    pes = np.concatenate([r[3] for r in results])
+    bulk_hic = np.concatenate([r[4] for r in results])
+    indexes = np.concatenate([r[5] for r in results])
+    metadatas = np.concatenate([r[6] for r in results])
     
-    return node_features, targets, pes, bulk_hic, indexes, metadatas
+    return node_features, targets, targets_eval, pes, bulk_hic, indexes, metadatas
 
 
 
@@ -318,6 +328,7 @@ def create_schic_pseudobulk_dataset(exclusion_set, PARAMETERS, set='debug', desc
     
     nfs = []
     tars = []
+    tar_evals = []
     pes = []
     bhs = []
     idxes = []
@@ -331,7 +342,7 @@ def create_schic_pseudobulk_dataset(exclusion_set, PARAMETERS, set='debug', desc
     for rnaseq_folder, schic_folder in zip(scrnaseq_dataset_paths, schic_dataset_paths):
         print('Working with: ', rnaseq_folder, ' and ', schic_folder)
         
-        nf, tar, pe, bh, idx, meta = create_cell_type_dataset(
+        nf, tar, tar_eval, pe, bh, idx, meta = create_cell_type_dataset(
             rnaseq_folder,
             schic_folder,
             PARAMETERS,
@@ -341,6 +352,7 @@ def create_schic_pseudobulk_dataset(exclusion_set, PARAMETERS, set='debug', desc
         )
         nfs.append(nf)
         tars.append(tar)
+        tar_evals.append(tar_eval)
         pes.append(pe)
         bhs.append(bh)
         idxes.append(idx)
@@ -350,6 +362,7 @@ def create_schic_pseudobulk_dataset(exclusion_set, PARAMETERS, set='debug', desc
     
     nfs = np.concatenate(nfs)
     tars = np.concatenate(tars)
+    tar_evals = np.concatenate(tar_evals)
     pes = np.concatenate(pes)
     bhs = np.concatenate(bhs)
     idxes = np.concatenate(idxes) 
@@ -363,6 +376,7 @@ def create_schic_pseudobulk_dataset(exclusion_set, PARAMETERS, set='debug', desc
     np.savez_compressed(output_file, 
         node_features=nfs, 
         targets=tars,
+        targets_eval=tar_evals,
         pes=pes,
         bulk_hics=bhs,
         indexes=idxes,
