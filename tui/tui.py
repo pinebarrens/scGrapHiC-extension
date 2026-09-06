@@ -5,10 +5,11 @@ scGrapHiC TUI
 To run: conda run -n scgraphic_env python tui.py
     
   Blind mode (scRNA-seq only):
-    1·Parse RNA-seq -> 2·Pseudobulk -> 3·Inference -> 4·Fine-tune -> 5·Analysis
+    1·Pseudobulk -> 2·Parse RNA-seq -> 3·Build (no scHi-C) -> 4·Inference -> 5·Analysis
 
   Ground-truth mode (scRNA-seq + scHi-C):
-    1·Parse RNA-seq -> 2·Parse scHi-C -> 3·Pseudobulk -> 4·Inference -> 5·Fine-tune -> 6·Analysis
+    1·Pseudobulk -> 2·Parse RNA-seq -> 3·Parse scHi-C -> 4·Build
+    -> 5·Inference -> 6·Fine-tune -> 7·Analysis
 """
 
 from __future__ import annotations

@@ -119,78 +119,80 @@ def create_chromosome_dataset(rna_seq_dataset_path, schic_dataset_path, chromoso
         raise ValueError("bulk_hic_dir is required (pass --bulk_dir).")
     if not motifs_dir:
         raise ValueError("motifs_dir is required (pass --motifs_dir).")
-    stage, tissue, cell_type, num_cells = get_file_name_parameters(schic_dataset_path)
+
+    # Blind mode: metadata comes from the RNA folder name
+    meta_path = schic_dataset_path if schic_dataset_path else rna_seq_dataset_path
+    stage, tissue, cell_type, num_cells = get_file_name_parameters(meta_path)
     if not stage:
         stage = 'brain'
-    
+
     cell_type = cell_type.replace(' ', '_')
-    
+
     rna_seq_file = os.path.join(rna_seq_dataset_path, 'chr{}_{}.npy'.format(chromosome, PARAMETERS['resolution']))
-    schic_file =  os.path.join(schic_dataset_path, 'chr{}_{}.npy'.format(chromosome, PARAMETERS['resolution']))
-    
+
     bulk_hic_file = os.path.join(bulk_hic_dir, 'chr{}_{}.npz'.format(chromosome, PARAMETERS['resolution']))
     informative_indexes_bulk_hic = bulk_hic_file
 
     ctcf_motif_file = os.path.join(motifs_dir, 'ctcf', 'chr{}_{}.npy'.format(chromosome, PARAMETERS['resolution']))
     cpg_motif_file = os.path.join(motifs_dir, 'cpg', 'chr{}_{}.npy'.format(chromosome, PARAMETERS['resolution']))
     dataset_labels = json.load(open(DATASET_LABELS_JSON, 'r'))
-    
+
     border_size = PARAMETERS['remove_borders'] // PARAMETERS['resolution']
-    
+
     # Bulk Hi-C (prior)
     bulk_hic_object = np.load(bulk_hic_file, allow_pickle=True)
     # Use compact indexes from the same bulk Hi-C file as the prior.
     informative_indexes = np.load(informative_indexes_bulk_hic, allow_pickle=True)['compact']
-    
+
     bulk_hic_data = compactM(bulk_hic_object['hic'], informative_indexes)
     bulk_hic_data = bulk_hic_data[border_size:, border_size:]
-    
-    # Divide
-    bulk_hic_data, _ = divide_matrix(bulk_hic_data, chromosome, PARAMETERS)
-    
+
+    # Divide (keep indexes for blind mode; overwritten if scHi-C is present)
+    bulk_hic_data, indexes = divide_matrix(bulk_hic_data, chromosome, PARAMETERS)
+
     if PARAMETERS['bulk_hic'] == 'basic_prior':
         replace_with_prior = lambda adj: generate_expected_contact_matrix(adj)
         bulk_hic_data = bulk_hic_data.reshape([bulk_hic_data.shape[0], -1])
         bulk_hic_data = np.apply_along_axis(replace_with_prior, 1, bulk_hic_data)
-    
+
     # Features
     rna_seq_data = np.load(rna_seq_file)
     ctcf_motif_data = np.load(ctcf_motif_file)
     cpg_motif_data = np.load(cpg_motif_file)
-    
+
     # Take informative indices only
     rna_seq_data = rna_seq_data.take(informative_indexes, axis=1)
     ctcf_motif_data = ctcf_motif_data.take(informative_indexes, axis=1)
     cpg_motif_data = cpg_motif_data.take(informative_indexes, axis=1)
-    
+
     # Clip Borders
     rna_seq_data = rna_seq_data[:, border_size:]
     ctcf_motif_data = ctcf_motif_data[:, border_size:]
     cpg_motif_data = cpg_motif_data[:, border_size:]
-    
+
     node_features = rna_seq_data
     if PARAMETERS['ctcf_motif'] == True:
         node_features = np.concatenate((node_features, ctcf_motif_data))
-    
+
     if PARAMETERS['cpg_motif'] == True:
         node_features = np.concatenate((node_features, cpg_motif_data))
 
-    node_features, _ = divide_signal(node_features.T, chromosome, PARAMETERS)    
+    node_features, _ = divide_signal(node_features.T, chromosome, PARAMETERS)
     node_features = node_features[:, 0, :, :]
 
-    # scHi-C data
-    schic_data = np.load(schic_file)
-    schic_data = compactM(schic_data, informative_indexes)
-    schic_data = schic_data[border_size: , border_size:]
-    
-    # Divide
-    schic_data, indexes = divide_matrix(schic_data, chromosome, PARAMETERS)
-    
-    
-    
+    # scHi-C targets (or zeros in blind / RNA-only mode)
+    if schic_dataset_path:
+        schic_file = os.path.join(schic_dataset_path, 'chr{}_{}.npy'.format(chromosome, PARAMETERS['resolution']))
+        schic_data = np.load(schic_file)
+        schic_data = compactM(schic_data, informative_indexes)
+        schic_data = schic_data[border_size:, border_size:]
+        schic_data, indexes = divide_matrix(schic_data, chromosome, PARAMETERS)
+    else:
+        schic_data = np.zeros_like(bulk_hic_data)
+
     schic_data = schic_data.reshape([schic_data.shape[0], -1])
     bulk_hic_data = bulk_hic_data.reshape([bulk_hic_data.shape[0], -1])
-    
+
     if PARAMETERS['normalization_algorithm'] == 'library_size_normalization':
         normalization_function = lambda adj: normalizations[PARAMETERS['normalization_algorithm']](adj, PARAMETERS['library_size'])
         schic_data = np.apply_along_axis(normalization_function, 1, schic_data)
@@ -199,27 +201,27 @@ def create_chromosome_dataset(rna_seq_dataset_path, schic_dataset_path, chromoso
         normalization_function = lambda adj: normalizations[PARAMETERS['normalization_algorithm']](adj)
         schic_data = np.apply_along_axis(normalization_function, 1, schic_data)
         bulk_hic_data = np.apply_along_axis(normalization_function, 1, bulk_hic_data)
-    
+
     schic_data = schic_data.reshape(schic_data.shape[0], 1, schic_data.shape[1], schic_data.shape[2])
     targets_eval = schic_data.copy()
-    bulk_hic_data = bulk_hic_data.reshape(bulk_hic_data.shape[0], 1, bulk_hic_data.shape[1], bulk_hic_data.shape[2]) 
-    
+    bulk_hic_data = bulk_hic_data.reshape(bulk_hic_data.shape[0], 1, bulk_hic_data.shape[1], bulk_hic_data.shape[2])
+
     parameterized_graph_pe = lambda adj: graph_pe(adj, encoding_dim=PARAMETERS['pos_encodings_dim'])
     pe = bulk_hic_data.reshape([bulk_hic_data.shape[0], -1])
     pe = np.apply_along_axis(parameterized_graph_pe, 1, pe)
-    
+
     if PARAMETERS['hic_smoothing']:
         smooth_parameterized = lambda adj: smooth_adjacency_matrix(adj, PARAMETERS['smoothing_threshold'])
         schic_data = schic_data.reshape([schic_data.shape[0], -1])
         schic_data = np.apply_along_axis(smooth_parameterized, 1, schic_data)
-    
+
     metadata = np.array([
         [dataset_labels['stage'][stage]]*indexes.shape[0],
         [dataset_labels['tissue'][tissue]]*indexes.shape[0],
         [dataset_labels['cell_type'][cell_type]]*indexes.shape[0],
         [int(num_cells)]*indexes.shape[0]
     ]).T
-    
+
     return (
         node_features[4:-4, :, :],
         schic_data[4:-4, :, :, :],
@@ -284,13 +286,14 @@ def create_schic_pseudobulk_dataset(exclusion_set, PARAMETERS, set='debug', desc
         raise ValueError("bulk_hic_dir is required (pass --bulk_dir).")
     if not rnaseq_input_dir:
         raise ValueError("rnaseq_input_dir is required (pass --rnaseq_dir).")
-    if not schic_input_dir:
-        raise ValueError("schic_input_dir is required (pass --schic_dir).")
+    # schic_input_dir is optional (blind / RNA-only prediction)
     if not output_dir:
         raise ValueError("output_dir is required (pass --output_dir).")
     if not motifs_dir:
         raise ValueError("motifs_dir is required (pass --motifs_dir).")
     create_directory(output_dir)
+
+    blind = not schic_input_dir
 
     scrnaseq_dataset_files = list(map(
         lambda x: os.path.join(rnaseq_input_dir, x),  # previously MOUSE_PREPROCESSED_DATA_PSEUDO_BULK_SCRNASEQ
@@ -300,32 +303,42 @@ def create_schic_pseudobulk_dataset(exclusion_set, PARAMETERS, set='debug', desc
         lambda x: '.csv' not in x,
         scrnaseq_dataset_files
     ))
-    
+
     schic_dataset_paths = []
     scrnaseq_dataset_paths = []
     for scrnaseq_dataset_file in scrnaseq_dataset_files:
-        # Check if the dataset has enough cells? 
+        # Check if the dataset has enough cells?
         stage, tissue, cell_type, num_cells = get_file_name_parameters(scrnaseq_dataset_file)
-        
+
         # Update the json dictionary
         add_dataset(stage, tissue, cell_type)
-        
-        
+
         # Exclusion criterion
         if num_cells < PARAMETERS['num_cells_cutoff']:
             continue
-        
+
         if tissue in exclusion_set or stage in exclusion_set or cell_type in exclusion_set:
             continue
-        
+
+        if blind:
+            scrnaseq_dataset_paths.append(scrnaseq_dataset_file)
+            schic_dataset_paths.append(None)
+            continue
+
         folder = '_'.join([stage, tissue, cell_type, 'n{}'.format(num_cells), 'schic']) if stage else  '_'.join([tissue, cell_type, 'n{}'.format(num_cells), 'schic'])
-        
+
         schic_folder_path = os.path.join(schic_input_dir, folder)  # was MOUSE_PREPROCESSED_DATA_PSEUDO_BULK_SCHIC
-                
+
         if os.path.exists(schic_folder_path):
             schic_dataset_paths.append(schic_folder_path)
             scrnaseq_dataset_paths.append(scrnaseq_dataset_file)
-    
+
+    if not scrnaseq_dataset_paths:
+        raise ValueError(
+            "No cell-type folders passed filters"
+            + (" (blind mode)." if blind else " with matching scHi-C folders.")
+        )
+
     nfs = []
     tars = []
     tar_evals = []
@@ -333,15 +346,15 @@ def create_schic_pseudobulk_dataset(exclusion_set, PARAMETERS, set='debug', desc
     bhs = []
     idxes = []
     metadatas = []
-    
+
     output_file = os.path.join(
         output_dir,  # was MOUSE_PROCESSED_DATA_HIRES
         '{}_{}.npz'.format(descriptor, set)
     )
-    
+
     for rnaseq_folder, schic_folder in zip(scrnaseq_dataset_paths, schic_dataset_paths):
-        print('Working with: ', rnaseq_folder, ' and ', schic_folder)
-        
+        print('Working with: ', rnaseq_folder, ' and ', schic_folder if schic_folder else '(blind: no scHi-C)')
+
         nf, tar, tar_eval, pe, bh, idx, meta = create_cell_type_dataset(
             rnaseq_folder,
             schic_folder,
@@ -392,7 +405,8 @@ if __name__ == '__main__':
 
     p = argparse.ArgumentParser(description='Build the .npz dataset from parsed pseudobulk matrices.')
     p.add_argument('--rnaseq_dir', required=True, help='Directory of parsed pseudobulk scRNA-seq track folders.')
-    p.add_argument('--schic_dir', required=True, help='Directory of parsed pseudobulk scHi-C matrix folders.')
+    p.add_argument('--schic_dir', default=None,
+                   help='Parsed scHi-C matrices dir. Omit for blind (RNA-only) prediction.')
     p.add_argument('--bulk_dir', required=True, help='Directory of the bulk Hi-C prior (.npz per chromosome).')
     p.add_argument('--motifs_dir', required=True, help='Directory with ctcf/ and cpg/ motif tracks.')
     p.add_argument('--output_dir', required=True, help='Directory to write {experiment}_{set}.npz.')

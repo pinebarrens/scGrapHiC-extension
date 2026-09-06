@@ -372,12 +372,20 @@ class TuiRunnersMixin:
         ok &= self.check_dir_exists(
             self.get_input("pb-rna-dir"), "Parsed RNA-seq dir", "*scrnaseq",
         )
-        ok &= self.check_dir_exists(
-            self.get_input("pb-hic-dir"), "Parsed scHi-C dir", "*schic",
-        )
+        if self.run_mode == "groundtruth":
+            ok &= self.check_dir_exists(
+                self.get_input("pb-hic-dir"), "Parsed scHi-C dir", "*schic",
+            )
+        else:
+            self.append_log(
+                "[dim]\u2714  Parsed scHi-C dir: not required (blind mode)[/dim]"
+            )
         ok &= self.check_writable_dir(self.get_input("pb-out"), "Output directory")
         ok &= self.check_int(self.get_input("pb-res", "50000"), "Resolution")
         ok &= self.check_int(self.get_input("pb-pe-dim", "16"), "PE dimension")
+        ok &= self.check_int(
+            self.get_input("pb-num-cells-cutoff", "190"), "Min cells cutoff",
+        )
         bulk_dir = self.get_input("pb-bulk-dir")
         if bulk_dir:
             ok &= self.check_dir_exists(bulk_dir, "Bulk Hi-C directory", "chr*_*.npz")
@@ -912,13 +920,12 @@ class TuiRunnersMixin:
             self.append_log("Motifs directory (pb-motifs-dir) is required.", "red")
             return
         hic_dir = self.get_input("pb-hic-dir")
-        if not hic_dir:
+        if self.run_mode == "groundtruth" and not hic_dir:
             self.append_log("Parsed scHi-C dir (pb-hic-dir) is required.", "red")
             return
         cmd = self.conda_python() + [
             "-m", MOD_BUILD,
             "--rnaseq_dir", rna_dir,
-            "--schic_dir", hic_dir,
             "--bulk_dir", bulk_dir,
             "--motifs_dir", motifs_dir,
             "--output_dir", out_dir,
@@ -928,7 +935,15 @@ class TuiRunnersMixin:
                             self.get_input("pb-norm", "library_size_normalization"),
             "--resolution", self.get_input("pb-res", "50000"),
             "--pos_encodings_dim", self.get_input("pb-pe-dim", "16"),
+            "--num_cells_cutoff",
+                            self.get_input("pb-num-cells-cutoff", "190"),
         ]
+        if hic_dir:
+            cmd += ["--schic_dir", hic_dir]
+        else:
+            self.append_log(
+                "Blind build: omitting --schic_dir (dummy targets).", "yellow"
+            )
         hic_smoothing = self.get_input("pb-hic-smoothing", "true").lower()
         if hic_smoothing in ("false", "0", "no", "off"):
             cmd += ["--no_hic_smoothing"]
