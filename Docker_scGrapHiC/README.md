@@ -55,5 +55,4 @@ docker run --rm -it --gpus all \
 ## Notes
 
 - The TUI runs pipeline steps via `conda run -n scgraphic python ...`. The image symlinks `conda` to `micromamba` and sets `SCGRAPHIC_CONDA_ENV=scgraphic`.
-- `textual` and `rich` are installed explicitly because they are not listed in `requirements.txt`.
-- Mount data, checkpoints, and output directories at runtime rather than baking them into the image.
+- Data, checkpoints, and output directories are mounted at runtime rather than embedded into the image.
